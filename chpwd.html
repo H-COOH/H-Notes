@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<script src="./js/md5.js"></script>
+	<script src="./js/AES.js"></script>
+	<script src="./js/opdb.js"></script>
+	<title>修改密码</title>
+</head>
+<body>
+<div>
+	<div id="one" style="display:none">
+		<h1>设置密码</h1>
+	</div>
+	<div id="two">
+		<h1>修改密码</h1>
+		<p><label for="p0">输入原密码：</label><input id="p0" type="password"></p>
+	</div>
+	<p><label for="p1">输入新密码：</label><input id="p1" type="password"></p>
+	<p><label for="p2">确认新密码：</label><input id="p2" type="password"></p>
+	<p>
+		<button disabled id="next">确认</button>&emsp;&emsp;<button disabled id="done">完成</button>
+	</p>
+	<p style="color:red">注：<b>请等待完成按钮解除禁用再关闭页面！</b></p>
+	<p><a href="set.html">返回设置</a></p>
+</div>
+</body>
+<style>
+	input[type=password]
+	{
+		width:200px;
+		height:28px;
+	}
+
+	button
+	{
+		width:135px;
+		height:32px;
+	}
+
+	body
+	{margin:1%;}
+</style>
+<script>
+	"use strict";
+
+	let ntdb=new Database("note"),imgdb=new Database("img");
+
+	function fi(k)
+	{return document.getElementById(k);}
+
+	let flag=0;
+
+	document.body.onload=()=>
+	{
+		if(localStorage.check_init===undefined)
+		{
+			fi("two").style.display="none";
+			fi("one").style.display="block";
+		}
+		ntdb.opendb().then(()=>
+			ntdb.readkeys().then(o=>
+			{
+				flag+=o.length;
+				imgdb.opendb().then(()=>
+					imgdb.readkeys().then(e=>
+					{
+						flag+=e.length;
+						alert("请关闭网站其它所有标签页");
+						fi("next").disabled=false;
+					})
+				);
+			})
+		);
+	};
+
+	function done()
+	{
+		localStorage.check_init="";
+		fi("next").disabled=true;
+		fi("done").disabled=false;
+	}
+
+	fi("next").onclick=()=>
+	{
+		let key=fi("p0").value;
+		if(!aes.check_key(key))
+			return alert("原密码错误");
+		aes.key=key;
+		key=fi("p1").value;
+		if(key==="")
+			return alert("新密码为空");
+		if(key!==fi("p2").value)
+			return alert("密码不匹配");
+		let r=localStorage.check_key;
+		if(r!==undefined)
+			localStorage.check_key=CryptoJS.AES.encrypt(aes.dec_data(r),key).toString();
+		r=localStorage.pathlist;
+		if(r!==undefined)
+			localStorage.pathlist=CryptoJS.AES.encrypt(aes.dec_data(r),key).toString();
+		r=localStorage.notelist;
+		if(r!==undefined)
+			localStorage.notelist=CryptoJS.AES.encrypt(aes.dec_data(r),key).toString();
+		r=localStorage.imglist;
+		if(r!==undefined)
+			localStorage.imglist=CryptoJS.AES.encrypt(aes.dec_data(r),key).toString();
+		r=localStorage.funlist;
+		if(r!==undefined)
+			localStorage.funlist=CryptoJS.AES.encrypt(aes.dec_data(r),key).toString();
+		if(!flag)
+			return done();
+		ntdb.readkeys().then(o=>
+		{
+			for(let i in o)
+				ntdb.readnote(o[i]).then(e=>
+				{
+					ntdb.get_ob(true).put(CryptoJS.AES.encrypt(JSON.stringify(e),key).toString(),o[i]);
+					if(!--flag)
+						done();
+				});
+		});
+		imgdb.readkeys().then(o=>
+		{
+			for(let i in o)
+				imgdb.readnote(o[i]).then(e=>
+				{
+					imgdb.get_ob(true).put(CryptoJS.AES.encrypt(JSON.stringify(e),key).toString(),o[i]);
+					if(!--flag)
+						done();
+				});
+		});
+	};
+
+	fi("done").onclick=()=>window.close();
+</script>
+</html>

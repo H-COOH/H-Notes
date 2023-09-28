@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<script src="./js/md5.js"></script>
+	<script src="./js/AES.js"></script>
+	<script src="./js/opdb.js"></script>
+	<script src="./js/show.js"></script>
+	<title>设置</title>
+</head>
+<body>
+<h1>设置</h1>
+<div>
+	<details>
+		<summary><b>搜索笔记</b></summary>
+		<p><label for="title">标题：</label><input id="title"></p>
+		<p><label for="whole">正文：</label><input id="whole"></p>
+		<p>
+			<span>创建于</span>
+			<label for="make0">从</label> <input id="make0" type="date">
+			<label for="make1">到</label> <input id="make1" type="date">
+		</p>
+		<p>
+			<span>修改于</span>
+			<label for="last0">从</label> <input id="last0" type="date">
+			<label for="last1">到</label> <input id="last1" type="date">
+		</p>
+		<p>
+			<button disabled id="go" onclick="find_note()" style="width:255px;height:35px">搜索</button>
+		</p>
+		<table>
+			<tbody id="val" style="display:none"></tbody>
+		</table>
+	</details>
+	<br>
+	<details>
+		<summary><b>排序笔记</b></summary>
+		<br>
+		<table>
+			<tbody id="sort"></tbody>
+		</table>
+	</details>
+	<br>
+	<details>
+		<summary><b>自定义样式</b></summary>
+		<br>
+		<table>
+			<tbody id="func"></tbody>
+		</table>
+		<br>
+		<div id="opfun" style="display:none">
+			<button class="funs" onclick="add_func()">添加</button>&emsp;&emsp;&emsp;
+			<button class="funs" onclick="save_func()">保存</button>&emsp;&emsp;&emsp;
+			<button class="funs" onclick="load_func()">取消</button>
+		</div>
+	</details>
+	<br>
+	<p>
+		<a href="chpwd.html">修改密码</a>&ensp;
+		<a href="totxt.html">备份数据</a>&ensp;
+		<a href="#" onclick="window.close()">关闭</a>
+	</p>
+</div>
+</body>
+<style>
+	summary
+	{font-size:17px;}
+
+	#title, #whole
+	{
+		width:200px;
+		height:25px;
+	}
+
+	input[type="date"]
+	{
+		width:105px;
+		height:25px;
+	}
+
+	table
+	{border-collapse:collapse;}
+
+	th, td
+	{
+		padding:5px;
+		border:1px solid;
+		text-align:center;
+	}
+
+	.id
+	{
+		width:60px;
+		height:25px;
+	}
+
+	.to
+	{
+		width:300px;
+		height:25px;
+	}
+
+	.del
+	{
+		width:45px;
+		height:25px;
+	}
+
+	input[type=checkbox]
+	{zoom:120%;}
+
+	.funs
+	{
+		width:130px;
+		height:32px;
+	}
+
+	body
+	{margin:1%;}
+</style>
+<script>
+	"use strict";
+
+	let flag=false,note=[];
+	let ntdb=new Database("note");
+
+	function fi(k)
+	{return document.getElementById(k);}
+
+	let channel=new window.BroadcastChannel("key");
+	channel.onmessage=o=>
+	{
+		if(!flag)
+			flag=true;
+		else
+			return;
+		aes.key=o.data;
+		ntdb.opendb().then(()=>
+		{
+			let r=aes.dec_data(localStorage.notelist),u="",v={};
+			for(let i=0; i<r.length; i++)
+			{
+				if(r[i]==="|")
+				{
+					v["path"]=u;
+					u="";
+				}
+				else if(r[i]==="#")
+				{
+					v["name"]=u;
+					u="";
+					let j=i+1;
+					while(r[i]!=="Y"&&r[i]!=="N")
+						i++;
+					v["link"]=parseInt(r.slice(j,i));
+					v["done"]=r[i]==="Y";
+					note.push(Object.assign({},v));
+				}
+				else
+					u+=r[i];
+			}
+			fi("go").disabled=false;
+			load_sort();
+			load_func();
+		});
+	};
+	channel.postMessage("");
+
+	fi("title").onkeydown=fi("whole").onkeydown=o=>o.key==="Enter"?find_note():null;
+
+	function find_note()
+	{
+		if(fi("title").value+fi("whole").value+fi("make0").value+fi("make1").value+fi("last0").value+fi("last1").value==="")
+			return fi("val").style.display="none";
+		fi("val").style.display="table-row-group";
+		fi("val").innerHTML="<tr><th>名称</th><th>路径</th><th>查看</th></tr>";
+		let nxt_d=d=>d.setDate(d.getDate()+1);
+		for(let i in note)
+			ntdb.readnote(note[i]["link"]).then(e=>
+			{
+				if(e["info"]!==""&&e["info"]["only"]===""
+					&&(fi("make0").value===""||new Date(fi("make0").value)<=new Date(e["info"]["make"]))
+					&&(fi("make1").value===""||nxt_d(new Date(fi("make1").value))>=new Date(e["info"]["make"]))
+					&&(fi("last0").value===""||new Date(fi("last0").value)<=new Date(e["info"]["last"]))
+					&&(fi("last1").value===""||nxt_d(new Date(fi("last1").value))>=new Date(e["info"]["last"]))
+					&& ~note[i]["name"].indexOf(fi("title").value)&& ~e["data"].indexOf(fi("whole").value))
+					fi("val").innerHTML+=`<tr><td>${note[i]["name"]}</td><td>${note[i]["path"]}</td><td><button onclick="view_note(${i})">查看</button></td></tr>`;
+			});
+	}
+
+	function view_note(k)
+	{
+		sessionStorage.ntname=note[k]["name"];
+		sessionStorage.ntvkey=note[k]["link"];
+		window.open("view.html");
+	}
+
+	function load_sort()
+	{
+		let code="<tr><th>排序</th><th>名称</th><th>路径</th><th>归档</th><th>查看</th></tr>";
+		for(let i in note)
+		{
+			code+="<tr class='li'>";
+			for(let j in [0,1,2,3,4])
+				code+=`<td id="t${i}x${j}"></td>`;
+			code+="</tr>";
+		}
+		fi("sort").innerHTML=code;
+		for(let i in note)
+		{
+			fi("t"+i+"x0").innerHTML="<button draggable='true' style='cursor:move'>排序</button>";
+			fi("t"+i+"x1").innerText=note[i]["name"];
+			fi("t"+i+"x2").innerText=note[i]["path"];
+			fi("t"+i+"x3").innerText=note[i]["done"]?"是":"否";
+			fi("t"+i+"x4").innerHTML=`<button onclick="view_note(${i})">查看</button>`;
+		}
+	}
+
+	let dragging=null;
+
+	let getnode=o=>
+	{
+		while(o.tagName!=="TR"&&o.tagName!=="BODY")
+			o=o.parentNode;
+		return o.tagName==="TR"&&o.classList.contains("li")?o:null;
+	};
+	let rmvborder=o=>
+	{
+		o.style.borderTop="";
+		o.style.borderBottom="";
+	};
+
+	document.ondragstart=o=>dragging=getnode(o.target);
+
+	document.ondragover=o=>
+	{
+		o.preventDefault();
+		let t=getnode(o.target);
+		if(!t)
+			return;
+		let bounding=t.getBoundingClientRect();
+		let offset=bounding.top+bounding.height/2;
+		rmvborder(t);
+		t.style[o.clientY<offset?"border-top":"border-bottom"]="solid 3px";
+	};
+
+	document.ondragleave=o=>o?rmvborder(getnode(o.target)):null;
+
+	document.ondrop=o=>
+	{
+		o.preventDefault();
+		let t=getnode(o.target);
+		if(!t)
+			return;
+		t.parentNode.insertBefore(dragging,t.style.borderTop!==""?t:t.nextSibling);
+		rmvborder(t);
+		let _note=[];
+		let all=document.getElementsByClassName("li");
+		for(let i=0; i<all.length; i++)
+			_note[i]=Object.assign({},note[parseInt(all[i].children[0].id.slice(1,-2))]);
+		let data="";
+		for(let i in _note)
+			data+=_note[i]["path"]+"|"+_note[i]["name"]+"#"+_note[i]["link"]+(_note[i]["done"]?"Y":"N");
+		localStorage.notelist=aes.enc_data(data);
+	};
+
+	const g="<td><input class='id'></td><td><input type='checkbox'></td><td><input class='to'></td><td><button class='del'>删除</button></td>";
+	let _=(s,i)=>s.children[i].children[0];
+
+	function load_func()
+	{
+		init_func();
+		let code="<tr><th>名称</th><th>参数</th><th>内容</th><th>删除</th></tr>";
+		for(let i in fun)
+			code+="<tr class='fi'>"+g+"</tr>";
+		fi("func").innerHTML=code;
+		let all=document.getElementsByClassName("fi"),t=0;
+		for(let i in fun)
+		{
+			_(all[t],0).value=i;
+			_(all[t],1).checked=fun[i][1];
+			_(all[t],2).value=fun[i][0];
+			_(all[t],3).onclick=o=>fi("func").removeChild(o.target.parentNode.parentNode);
+			t++;
+		}
+		fi("opfun").style.display="block";
+	}
+
+	function add_func()
+	{
+		let t=document.createElement("tr");
+		t.setAttribute("class","fi");
+		t.innerHTML=g;
+		fi("func").appendChild(t);
+		_(fi("func").lastChild,3).onclick=o=>fi("func").removeChild(o.target.parentNode.parentNode);
+	}
+
+	function save_func()
+	{
+		let func=[],data="";
+		let all=document.getElementsByClassName("fi");
+		let _=(i,j)=>all[i].children[j].children[0];
+		let __=c=>c.indexOf("|")!== -1;
+		for(let i=0; i<all.length; i++)
+		{
+			if(_(i,0).value==="")
+				return alert("函数名不可为空");
+			if(_(i,0).value==="img")
+				return alert("img是保留函数名");
+			if(__(_(i,0).value)||__(_(i,2).value))
+				return alert("不可含有字符'|'");
+			func.push(_(i,0).value);
+			data+=_(i,0).value+"|"+(_(i,1).checked?"Y":"N")+_(i,2).value+"|";
+		}
+		if((new Set(func)).size!==func.length)
+			return alert("函数名不可重复");
+		localStorage.funlist=aes.enc_data(data);
+		alert("已保存");
+	}
+</script>
+</html>

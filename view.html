@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<script src="./js/md5.js"></script>
+	<script src="./js/AES.js"></script>
+	<script src="./js/opdb.js"></script>
+	<script src="./js/img.js"></script>
+	<script src="./js/info.js"></script>
+	<script src="./js/show.js"></script>
+	<link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/katex.min.css" rel="stylesheet">
+	<script crossorigin="anonymous" defer src="https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/katex.min.js"></script>
+	<title>查看</title>
+</head>
+<body>
+<h1 id="name" style="margin-left:1vw"></h1>
+<div id="main_out">
+	<div id="main"></div>
+	<p class="codes"><a href="#" onclick="view_code(true)">源码</a></p>
+</div>
+<div class="hide" id="code_out">
+	<label><textarea id="code" readonly></textarea></label>
+	<p class="codes"><a href="#" onclick="view_code(false)">内容</a></p>
+</div>
+<div id="part" style="z-index:2">
+	<div id="tiny" onclick="show_list(true)"><p><b>目录</b></p></div>
+	<div class="hide" id="huge">
+		<p><b>目录</b><a href="#" onclick="show_list(false)" style="font-size:smaller">[关闭]</a></p>
+		<ul id="list" style="margin-inline-start:-0.5em;text-align:left"></ul>
+	</div>
+</div>
+<p class="infos" id="toinfo" style="z-index:2"><a href="#" onclick="view_info(1)">属性</a></p>
+<div id="back">
+	<div class="hide" id="auth">
+		<h3>请提供密码</h3>
+		<label><input id="next" type="password"></label>
+	</div>
+	<div class="info hide" id="none"></div>
+	<iframe class="info hide" id="info" src="about:blank"></iframe>
+	<p class="infos hide" id="uninfo" style="z-index:4"><a href="#" onclick="view_info(0)">关闭</a></p>
+</div>
+</body>
+<style id="like"></style>
+<style>
+	#main
+	{
+		margin:2%;
+		font-size:17px;
+		line-height:1.5;
+	}
+
+	#code
+	{
+		top:10vh;
+		left:5vw;
+		width:85vw;
+		height:85vh;
+		position:fixed;
+		font-size:17px;
+	}
+
+	#tiny
+	{
+		top:45vh;
+		right:0;
+		width:1vw;
+		height:10vh;
+		position:fixed;
+		background-color:wheat;
+		padding:4px;
+	}
+
+	#huge
+	{
+		top:35vh;
+		right:0;
+		width:9.4vw;
+		height:30vh;
+		position:fixed;
+		background-color:wheat;
+		padding:2px;
+		overflow:auto;
+		text-align:center;
+		white-space:nowrap;
+	}
+
+	#back
+	{
+		top:0;
+		left:0;
+		width:100vw;
+		height:100vh;
+		z-index:3;
+		opacity:0.9;
+		position:absolute;
+		text-align:center;
+		background-color:#09A7A1;
+	}
+
+	#auth
+	{
+		top:42vh;
+		left:42vw;
+		width:16vw;
+		height:16vh;
+		position:absolute;
+		background-color:mistyrose;
+	}
+
+	#next
+	{
+		width:120px;
+		height:30px;
+	}
+
+	#none
+	{
+		z-index:4;
+		opacity:0.3;
+	}
+
+	.codes
+	{
+		right:3vw;
+		bottom:5vh;
+		z-index:2;
+		position:fixed;
+		font-size:17px;
+	}
+
+	.info
+	{
+		top:6vh;
+		left:38vw;
+		width:24vw;
+		height:88vh;
+		position:absolute;
+		background-color:mistyrose;
+	}
+
+	.infos
+	{
+		right:3vw;
+		bottom:2vh;
+		position:fixed;
+		font-size:17px;
+	}
+
+	.hide
+	{display:none;}
+
+	img
+	{display:block;}
+
+	blockquote
+	{
+		padding-left:20px;
+		border-left:5px solid #eee;
+	}
+
+	@media print
+	{
+		#part
+		{display:none !important;}
+
+		.codes
+		{display:none;}
+
+		#toinfo
+		{display:none !important;}
+	}
+</style>
+<script>
+	"use strict";
+
+	let flag=false;
+
+	function fi(k)
+	{return document.getElementById(k);}
+
+	let channel=new window.BroadcastChannel("key");
+	channel.onmessage=o=>
+	{
+		if(!flag)
+			flag=true;
+		else
+			return;
+		aes.key=o.data;
+		init_func();
+		init_img().then(()=>
+		{
+			load_info(false).then(()=>
+			{
+				use_info();
+				fi("name").innerText=sessionStorage.ntname;
+				document.title=sessionStorage.ntname+"-查看";
+				if(info["only"]==="")
+					return init();
+				let tmp=ckey(name);
+				if(tmp!=="")
+				{
+					data=CryptoJS.AES.decrypt(data,tmp).toString(CryptoJS.enc.Utf8);
+					return init();
+				}
+				fi("auth").style.display="block";
+				fi("next").focus();
+			});
+		});
+	};
+	channel.postMessage("");
+
+	fi("next").onkeydown=o=>
+	{
+		if(o.key!=="Enter")
+			return;
+		let use=data,tmp=fi("next").value;
+		try
+		{use=CryptoJS.AES.decrypt(use,tmp).toString(CryptoJS.enc.Utf8);}
+		catch(e)
+		{use=null;}
+		if(md5(use)!==info["only"])
+			return alert("密码错误，请重试");
+		data=use;
+		document.cookie=name+"=@"+tmp+"@";
+		fi("auth").style.display="none";
+		init();
+	};
+
+	function init()
+	{
+		show_note();
+		fi("code").value=data;
+		fi("back").style.display="none";
+		fi("none").style.display="block";
+		fi("info").style.display="block";
+		fi("uninfo").style.display="block";
+	}
+
+	function use_info()
+	{fi("like").innerText="#main{"+info["show"].replaceAll(";"," !important;")+"}";}
+
+	function show_list(r)
+	{
+		fi("tiny").style.display=r?"none":"block";
+		fi("huge").style.display=r?"block":"none";
+	}
+
+	function show_note()
+	{
+		let R=O(data,show_note);
+		fi("main").innerHTML=R[0];
+		fi("list").innerHTML=R[1];
+	}
+
+	function view_info(r)
+	{
+		fi("info").src=r?"info.html?mode=view":"about:blank";
+		fi("back").style.display=r?"block":"none";
+		fi("toinfo").style.display=r?"none":"block";
+		document.body.style.overflow=r?"hidden":"visible";
+		if(!r)
+			load_info(false).then(()=>use_info());
+	}
+
+	function view_code(r)
+	{
+		fi("main_out").style.display=r?"none":"block";
+		fi("code_out").style.display=r?"block":"none";
+		fi("part").style.display=r?"none":"block";
+	}
+</script>
+</html>

@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<script src="./js/md5.js"></script>
+	<script src="./js/AES.js"></script>
+	<script src="./js/opdb.js"></script>
+	<title>备份数据</title>
+</head>
+<body>
+<div id="main">
+	<h1>备份数据</h1>
+	<p>
+		<button onclick="show('main',0);show('din',1)" style="width:200px">导入数据</button>
+	</p>
+	<p>
+		<button onclick="show('main',0);show('dout',1)" style="width:200px">导出数据</button>
+	</p>
+	<p style="color:red">注：<b>导入数据的过程将清空原数据！</b></p>
+	<p><a href="set.html">返回设置</a></p>
+</div>
+<div id="din" style="display:none">
+	<h1>导入数据</h1>
+	<p><input accept=".txt" id="f" type="file"></p>
+	<p><label for="p0">请输入密码：</label><input id="p0" type="password"></p>
+	<p>
+		<button onclick="din()">导入</button>
+	</p>
+	<p>
+		<button onclick="show('din',0);show('main',1)">返回</button>
+	</p>
+</div>
+<div id="dout" style="display:none">
+	<h1>导出数据</h1>
+	<p><label for="p1">请输入密码：</label><input id="p1" type="password"></p>
+	<p><label for="p2">请确认密码：</label><input id="p2" type="password"></p>
+	<a id="txt" style="display:none;"></a>
+	<p>
+		<button onclick="dout()">导出</button>
+	</p>
+	<p>
+		<button onclick="show('dout',0);show('main',1)">返回</button>
+	</p>
+</div>
+</body>
+<style>
+	input[type=password]
+	{
+		width:120px;
+		height:28px;
+	}
+
+	button
+	{
+		width:223px;
+		height:34px;
+	}
+
+	body
+	{margin:1%;}
+</style>
+<script>
+	"use strict";
+
+	let ntdb=new Database("note"),imgdb=new Database("img");
+
+	function fi(k)
+	{return document.getElementById(k);}
+
+	function show(k,f)
+	{fi(k).style.display=f?"block":"none";}
+
+	function din()
+	{
+		let file=fi("f").files;
+		if(!file.length)
+			return;
+		if(!confirm("确定导入？"))
+			return;
+		let reader=new FileReader();
+		reader.readAsText(file[0]);
+		reader.onload=o=>
+		{
+			let data=o.target.result;
+			let re=data.slice(32);
+			try
+			{re=CryptoJS.AES.decrypt(re,fi("p0").value).toString(CryptoJS.enc.Utf8);}
+			catch(err)
+			{re=null;}
+			if(md5(re)!==data.slice(0,32))
+				return alert("密码错误，请重试");
+			let json=JSON.parse(re);
+			for(let i in json["main"])
+				localStorage[i]=json["main"][i];
+			let flag=Object.keys(json["note"]).length+Object.keys(json["img"]).length;
+
+			function show_success(f)
+			{
+				if(f)
+					return;
+				alert("导入成功，请重启网站所有标签页");
+				setTimeout(window.location.href="set.html",500);
+			}
+
+			ntdb.opendb().then(()=>
+				ntdb.delall().then(()=>
+				{
+					for(let i in json["note"])
+						ntdb.get_ob(true).put(json["note"][i],parseInt(i)).onsuccess=()=>show_success(--flag);
+				})
+			);
+			imgdb.opendb().then(()=>
+				imgdb.delall().then(()=>
+				{
+					for(let i in json["img"])
+						imgdb.get_ob(true).put(json["img"][i],parseInt(i)).onsuccess=()=>show_success(--flag);
+				})
+			);
+		};
+	}
+
+	function dout()
+	{
+		if(fi("p1").value==="")
+			return alert("请输入密码");
+		if(fi("p1").value!==fi("p2").value)
+			return alert("密码不匹配");
+		let flag=0;
+		let json={"main":{},"note":{},"img":{}};
+		json["main"]["check_init"]="";
+		const name=["check_key","check_md5","pathlist","notelist","imglist","funlist"];
+		for(let i in name)
+			if(name[i] in localStorage)
+				json["main"][name[i]]=localStorage[name[i]];
+		ntdb.opendb().then(()=>
+			imgdb.opendb().then(()=>
+				ntdb.readkeys().then(o=>
+				{
+					flag+=o.length;
+					imgdb.readkeys().then(e=>
+					{
+						flag+=e.length;
+						go();
+					});
+				})
+			)
+		);
+
+		function go()
+		{
+			function show_success(f)
+			{
+				if(f)
+					return;
+				let re=JSON.stringify(json);
+				re=md5(re)+CryptoJS.AES.encrypt(re,fi("p1").value).toString();
+				fi("txt").setAttribute("href","data:text/plain;charset=utf-8,"+encodeURIComponent(re));
+				fi("txt").setAttribute("download","H-Notes.txt");
+				fi("txt").click();
+				setTimeout(window.location.href="set.html",500);
+			}
+
+			ntdb.readkeys().then(o=>
+			{
+				for(let i in o)
+					ntdb.get_ob(false).get(o[i]).onsuccess=e=>
+					{
+						json["note"][o[i]]=e.target.result;
+						show_success(--flag);
+					};
+			});
+			imgdb.readkeys().then(o=>
+			{
+				for(let i in o)
+					imgdb.get_ob(false).get(o[i]).onsuccess=e=>
+					{
+						json["img"][o[i]]=e.target.result;
+						show_success(--flag);
+					};
+			});
+		}
+	}
+</script>
+</html>

@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<script src="./js/md5.js"></script>
+	<script src="./js/AES.js"></script>
+	<script src="./js/opdb.js"></script>
+	<script src="./js/img.js"></script>
+	<script src="./js/info.js"></script>
+	<script src="./js/show.js"></script>
+	<link crossorigin="anonymous" href="https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/katex.min.css" rel="stylesheet">
+	<script crossorigin="anonymous" defer src="https://cdn.jsdelivr.net/npm/katex@0.16.2/dist/katex.min.js"></script>
+	<title>编辑</title>
+</head>
+<body>
+<h1 id="name" style="margin-left:1vw"></h1>
+<div contenteditable="true" id="main" onscroll=Ms()></div>
+<br>
+<button class="buttons" id="tosave" style="width:20vw">
+	<span>保存</span><small class="hide" style="color:red;">(未保存)</small>
+</button>
+<button class="buttons" id="unsave" style="width:10vw">取消</button>
+<span style="margin-left:1.5vw">字数统计：共</span><b id="numb"></b><span>字</span>
+<div id="view" onscroll=Ns()></div>
+<div style="z-index:3">
+	<div id="tiny" onclick="show_list(true)"><p><b>目录</b></p></div>
+	<div class="hide" id="huge">
+		<p><b>目录</b><a href="#" onclick="show_list(false)" style="font-size:smaller">[关闭]</a></p>
+		<ul id="list" style="margin-inline-start:-0.5em;text-align:left"></ul>
+	</div>
+</div>
+<p id="refresh"><a href="#" onclick="init_img().then(show_note)">刷新</a></p>
+<p class="infos" id="toinfo"><a href="#" onclick="view_info(1)">属性</a></p>
+<div id="back">
+	<div class="hide" id="auth">
+		<h3>请提供密码</h3>
+		<label><input id="next" type="password"></label>
+	</div>
+	<iframe class="hide" id="info" src="about:blank"></iframe>
+	<p class="infos hide" id="uninfo"><a href="#" onclick="view_info(0)">关闭</a></p>
+</div>
+<div id="auto">
+	<label><input id="part"></label>
+	<ol id="full"></ol>
+</div>
+</body>
+<style id="like"></style>
+<style>
+	#main
+	{
+		width:44vw;
+		height:78vh;
+		font-size:16px;
+		white-space:pre-wrap;
+		box-sizing:border-box;
+		border:1px solid;
+		margin-left:2vw;
+		overflow:auto;
+	}
+
+	#view
+	{
+		top:0;
+		right:0;
+		width:48vw;
+		height:93vh;
+		font-size:17px;
+		line-height:1.5;
+		position:absolute;
+		background-color:azure;
+		box-sizing:border-box;
+		margin:2%;
+		padding:1%;
+		overflow:auto;
+	}
+
+	#tiny
+	{
+		top:45vh;
+		right:0;
+		width:1vw;
+		height:10vh;
+		position:absolute;
+		background-color:wheat;
+		padding:4px;
+	}
+
+	#huge
+	{
+		top:35vh;
+		right:0;
+		width:9.4vw;
+		height:30vh;
+		position:absolute;
+		background-color:wheat;
+		padding:2px;
+		overflow:auto;
+		text-align:center;
+		white-space:nowrap;
+	}
+
+	#refresh
+	{
+		position:fixed;
+		right:3vw;
+		bottom:5vh;
+		z-index:2;
+		font-size:17px;
+	}
+
+	#back
+	{
+		top:0;
+		left:0;
+		width:100vw;
+		height:100vh;
+		z-index:4;
+		opacity:0.9;
+		position:absolute;
+		text-align:center;
+		background-color:#09A7A1;
+	}
+
+	#auth
+	{
+		top:42vh;
+		left:42vw;
+		width:16vw;
+		height:16vh;
+		position:absolute;
+		background-color:mistyrose;
+	}
+
+	#next
+	{
+		width:120px;
+		height:30px;
+	}
+
+	#info
+	{
+		top:6vh;
+		left:38vw;
+		width:24vw;
+		height:88vh;
+		position:absolute;
+		background-color:mistyrose;
+	}
+
+	#auto
+	{
+		position:absolute;
+		z-index:2;
+		display:none;
+		background-color:white;
+	}
+
+	#part
+	{
+		width:160px;
+		height:25px;
+		font-size:15px;
+	}
+
+	#full
+	{
+		width:160px;
+		height:150px;
+		border:1px solid;
+		overflow:auto;
+		font-size:14px;
+	}
+
+	.hide
+	{display:none;}
+
+	.buttons
+	{
+		height:5vh;
+		margin-left:2vw;
+	}
+
+	.infos
+	{
+		position:fixed;
+		right:3vw;
+		bottom:2vh;
+		z-index:3;
+		font-size:17px;
+	}
+
+	.may
+	{
+		color:blue;
+		background-color:lime;
+	}
+
+	img
+	{display:block;}
+
+	blockquote
+	{
+		padding-left:20px;
+		border-left:5px solid #eee;
+	}
+</style>
+<script>
+	"use strict";
+
+	let ti=0,flag=false;
+
+	function fi(k)
+	{return document.getElementById(k);}
+
+	let channel=new window.BroadcastChannel("key");
+	channel.onmessage=o=>
+	{
+		if(!flag)
+			flag=true;
+		else
+			return;
+		aes.key=o.data;
+		init_func();
+		fun["img"]=["",true];
+		for(let i in fun)
+			func.push("{"+i+"|"+(fun[i][1]?"()}":"}"));
+		word=init_word();
+		init_img().then(()=>
+		{
+			load_info(true).then(()=>
+			{
+				use_info();
+				fi("name").innerText=sessionStorage.ntname;
+				document.title=sessionStorage.ntname+"-编辑";
+				if(info["only"]==="")
+					return init();
+				let tmp=ckey(name);
+				if(tmp!=="")
+				{
+					data=CryptoJS.AES.decrypt(data,tmp).toString(CryptoJS.enc.Utf8);
+					return init();
+				}
+				fi("auth").style.display="block";
+				fi("next").focus();
+			});
+		});
+	};
+	channel.postMessage("");
+
+	fi("next").onkeydown=o=>
+	{
+		if(o.key!=="Enter")
+			return;
+		let use=data,tmp=fi("next").value;
+		try
+		{use=CryptoJS.AES.decrypt(use,tmp).toString(CryptoJS.enc.Utf8);}
+		catch(e)
+		{use=null;}
+		if(md5(use)!==info["only"])
+			return alert("密码错误，请重试");
+		data=use;
+		document.cookie=name+"=@"+tmp+"@";
+		fi("auth").style.display="none";
+		init();
+	};
+
+	fi("main").oninput=()=>
+	{
+		show_note();
+		show_save(false);
+	};
+
+	fi("tosave").onclick=()=>
+	{
+		ntdb.get_ob(true).openCursor(name).onsuccess=o=>
+		{
+			let e=o.target.result;
+			if(e===null)
+				return alert("无法保存该文件");
+			if(!confirm("确定保存？"))
+				return;
+			data=get_text();
+			let t=new Date(),_=c=>String(c).padStart(2,"0");
+			info["last"]=t.getFullYear()+"/"+_(t.getMonth()+1)+"/"+_(t.getDate())+" "+_(t.getHours())+":"+_(t.getMinutes());
+			info["edit"]+=ti;
+			if(info["only"]==="")
+				e.update(aes.enc_db({"info":info,"data":data}));
+			else
+			{
+				info["only"]=md5(data);
+				e.update(aes.enc_db({"info":info,"data":CryptoJS.AES.encrypt(data,key2).toString()}));
+			}
+			ti=0;
+			show_save(true);
+		};
+	};
+
+	fi("unsave").onclick=()=>
+	{
+		fi("main").innerText=data;
+		ti=0;
+		show_note();
+		show_save(true);
+	};
+
+	function init()
+	{
+		fi("main").innerText=data;
+		show_note();
+		fi("back").style.display="none";
+		fi("info").style.display="block";
+		fi("uninfo").style.display="block";
+		setInterval(()=>ti++,1000);
+	}
+
+	function use_info()
+	{
+		if(info["read"])
+		{
+			fi("main").contentEditable="false";
+			fi("tosave").disabled=true;
+		}
+		else
+		{
+			fi("main").contentEditable="true";
+			fi("tosave").disabled=false;
+		}
+		fi("like").innerText="#view{"+info["show"].replaceAll(";"," !important;")+"}";
+	}
+
+	function show_list(r)
+	{
+		fi("tiny").style.display=r?"none":"block";
+		fi("huge").style.display=r?"block":"none";
+	}
+
+	function show_note()
+	{
+		let R=O(get_text(),show_note);
+		fi("view").innerHTML=R[0];
+		fi("list").innerHTML=R[1];
+		fi("numb").innerText=R[2];
+	}
+
+	function show_save(flag)
+	{
+		window.onbeforeunload=flag?null:()=>"";
+		fi("tosave").children[1].style.display=flag?"none":"inline";
+	}
+
+	function view_info(r)
+	{
+		fi("info").src=r?"info.html?mode=edit":"about:blank";
+		fi("back").style.display=r?"block":"none";
+		fi("toinfo").style.display=r?"none":"block";
+		if(!r)
+			load_info(true).then(()=>
+			{
+				use_info();
+				if(info["only"]!=="")
+					data=CryptoJS.AES.decrypt(data,ckey(name)).toString(CryptoJS.enc.Utf8);
+			});
+	}
+
+	function get_text()
+	{
+		let re="",back=true,fresh=true,front=true;
+
+		function parse(childNodes)
+		{
+			for(let i=0; i<childNodes.length; i++)
+			{
+				let use=childNodes[i];
+				if(use.nodeName==="BR")
+				{
+					re+="\n";
+					back=false;
+					fresh=true;
+					front=true;
+				}
+				if(use.nodeName==="DIV"&& !fresh)
+				{
+					re+="\n";
+					fresh=true;
+				}
+				if(use.nodeType===Node.TEXT_NODE&&use.textContent)
+				{
+					if(i&&childNodes[i-1].nodeName==="DIV"&& !front)
+						re+="\n";
+					re+=use.textContent;
+					back=false;
+					fresh=false;
+					front=false;
+				}
+				parse(use.childNodes);
+			}
+		}
+
+		parse(fi("main").childNodes);
+		if(re[re.length-1]==="\n")
+			re=re.slice(0,-1);
+		return re;
+	}
+
+	let type,word=[],func=[];
+	let range,res,off,now;
+
+	function get_sel()
+	{
+		range=window.getSelection().getRangeAt(0);
+		res=range.startContainer.nodeValue;
+		off=range.startOffset;
+		range.deleteContents();
+	}
+
+	function ins_text(str,at)
+	{
+		let node=document.createTextNode(str);
+		range.insertNode(node);
+		window.getSelection().addRange(range);
+		range.setStart(node,~at?at:str.length);
+		range.setEnd(node,~at?at:str.length);
+		fi("main").normalize();
+		show_note();
+		if(str!=="")
+			show_save(false);
+	}
+
+	fi("main").onkeydown=o=>
+	{
+		function chk_latex()
+		{
+			get_sel();
+			for(let i=off-1; i&&off; i--)
+				if(res[i]==="#"&&res[i-1]!=="\\")
+					return res[i-1]==="$";
+			return false;
+		}
+
+		function show_auto()
+		{
+			let span=document.createElement("span");
+			span.appendChild(document.createTextNode("\u200b"));
+			range.cloneRange().insertNode(span);
+			let rect=span.getClientRects()[0];
+			let parent=span.parentNode;
+			parent.removeChild(span);
+			parent.normalize();
+			document.getElementById("auto").style.top=rect.top+"px";
+			document.getElementById("auto").style.left=rect.left+"px";
+			fi("auto").style.display="block";
+			fi("part").value="";
+			fi("part").focus();
+		}
+
+		if(o.key==="{")
+			if(chk_latex())
+			{
+				o.preventDefault();
+				ins_text("{}",1);
+			}
+			else if(!off||res[off-1]!=="\\")
+			{
+				type=false;
+				show_auto();
+			}
+		if(o.key==="#")
+		{
+			get_sel();
+			if(off&&res[off-1]==="$")
+			{
+				o.preventDefault();
+				ins_text("##",1);
+			}
+		}
+		if(o.key==="\\"&&chk_latex())
+		{
+			type=true;
+			show_auto();
+		}
+		if(o.key==="("||o.key==="[")
+		{
+			o.preventDefault();
+			get_sel();
+			if(o.key==="(")
+				ins_text("()",1);
+			else
+				ins_text("[]",1);
+		}
+	};
+
+	fi("main").onpaste=o=>
+	{
+		o.preventDefault();
+		get_sel();
+		ins_text(o.clipboardData.getData("text/plain"),-1);
+	};
+
+	function get_now(k)
+	{
+		fi("auto").style.display="none";
+		if(k=== -1)
+			return ins_text(fi("part").value,-1);
+		let t=fi("full").children[k].innerText;
+		if(type)
+			ins_text(t,-1);
+		else
+		{
+			if(t.indexOf("(")=== -1)
+				ins_text(t,t.indexOf("|")+1);
+			else
+				ins_text(t,t.indexOf("(")+1);
+		}
+	}
+
+	fi("part").oninput=()=>
+	{
+		let tmp=fi("part").value;
+		if(!tmp.length)
+			get_now(-1);
+		let res="",j=0;
+		if(type&&tmp!=="\\")
+			for(let i in word)
+				if(word[i].indexOf(tmp)!== -1)
+					res+=`<li onclick="get_now(${j++})" tabindex="-1">${word[i]}</li>`;
+		if(!type&&tmp!=="{")
+			for(let i in func)
+				if(func[i].indexOf(tmp)!== -1)
+					res+=`<li onclick="get_now(${j++})" tabindex="-1">${func[i]}</li>`;
+		fi("full").innerHTML=res;
+		if(res!=="")
+			fi("full").children[now=0].className="may";
+		else
+			now= -1;
+	};
+
+	fi("part").onkeydown=o=>
+	{
+		function set_scroll()
+		{
+			let tmp=fi("full");
+			tmp.scrollTop=now/(tmp.childNodes.length-1)*(tmp.scrollHeight-tmp.clientHeight);
+		}
+
+		if(o.key==="ArrowUp")
+		{
+			o.preventDefault();
+			fi("full").children[now].className="";
+			now=(now-1+fi("full").childNodes.length)%fi("full").childNodes.length;
+			fi("full").children[now].className="may";
+			set_scroll();
+		}
+		if(o.key==="ArrowDown")
+		{
+			o.preventDefault();
+			fi("full").children[now].className="";
+			now=(now+1)%fi("full").childNodes.length;
+			fi("full").children[now].className="may";
+			set_scroll();
+		}
+		if(o.key==="Enter")
+		{
+			o.preventDefault();
+			get_now(now);
+		}
+	};
+
+	let Mc=true,Nc=true,Mi=fi("main"),Ni=fi("view");
+
+	function Ms()
+	{
+		if(Mc)
+		{
+			Nc=false;
+			Ni.scrollTop=Mi.scrollTop/(Mi.scrollHeight-Mi.clientHeight)*(Ni.scrollHeight-Ni.clientHeight);
+		}
+		else
+		{Mc=true;}
+	}
+
+	function Ns()
+	{
+		if(Nc)
+		{
+			Mc=false;
+			Mi.scrollTop=Ni.scrollTop/(Ni.scrollHeight-Ni.clientHeight)*(Mi.scrollHeight-Mi.clientHeight);
+		}
+		else
+		{Nc=true;}
+	}
+
+	let init_word=()=>["\\!","\\#","\\$","\\%","\\&","\\'","\\(","\\)","\\,","\\.","\\:","\\;","\\=","\\AA","\\AE","\\Alpha","\\And","\\Bbb","\\Bbbk","\\Beta","\\Big","\\Bigg","\\Biggl","\\Biggm","\\Biggr","\\Bigl","\\Bigm","\\Bigr","\\Box","\\Bumpeq","\\Cap","\\Chi","\\Colonapprox","\\Coloneq","\\Coloneqq","\\Colonsim","\\Complex","\\Cup","\\DOTSB","\\DOTSI","\\DOTSX","\\Dagger","\\Darr","\\Delta","\\Diamond","\\Doteq","\\Downarrow","\\Epsilon","\\Eqcolon","\\Eqqcolon","\\Eta","\\Finv","\\Game","\\Gamma","\\H","\\Harr","\\Huge","\\Im","\\Iota","\\Join","\\KaTeX","\\Kappa","\\LARGE","\\LaTeX","\\Lambda","\\Large","\\Larr","\\Leftarrow","\\Leftrightarrow","\\Lleftarrow","\\Longleftarrow","\\Longleftrightarrow","\\Longrightarrow","\\Lrarr","\\Lsh","\\Mu","\\N","\\Nu","\\O","\\OE","\\Omega","\\Omicron","\\Overrightarrow","\\P","\\Phi","\\Pi","\\Pr","\\Psi","\\R","\\Rarr","\\Re","\\Reals","\\Relbar","\\Rho","\\Rightarrow","\\Rrightarrow","\\Rsh","\\S","\\Sigma","\\Subset","\\Supset","\\Tau","\\TeX","\\TextOrMath","\\Theta","\\Uarr","\\Uparrow","\\Updownarrow","\\Upsilon","\\Vdash","\\Vert","\\Vvdash","\\Xi","\\Z","\\Zeta","\\]","\\^","\\_","\\`","\\aa","\\above","\\acute","\\ae","\\alef","\\alefsym","\\aleph","\\allowbreak","\\alpha","\\amalg","\\angle","\\approx","\\approxcolon","\\approxcoloncolon","\\approxeq","\\arccos","\\arcctg","\\arcsin","\\arctan","\\arctg","\\arg","\\arraystretch","\\ast","\\asymp","\\atop","\\backepsilon","\\backprime","\\backsim","\\backsimeq","\\backslash","\\bar","\\barwedge","\\bcancel","\\because","\\begin","\\begingroup","\\beta","\\beth","\\between","\\bf","\\bgroup","\\big","\\bigcap","\\bigcirc","\\bigcup","\\bigg","\\biggl","\\biggm","\\biggr","\\bigl","\\bigm","\\bigodot","\\bigoplus","\\bigotimes","\\bigr","\\bigsqcup","\\bigstar","\\bigtriangledown","\\bigtriangleup","\\biguplus","\\bigvee","\\bigwedge","\\binom","\\blacklozenge","\\blacksquare","\\blacktriangle","\\blacktriangledown","\\blacktriangleleft","\\blacktriangleright","\\blue","\\blueA","\\blueB","\\blueC","\\blueD","\\blueE","\\bm","\\bmod","\\bold","\\boldsymbol","\\bot","\\bowtie","\\boxdot","\\boxed","\\boxminus","\\boxplus","\\boxtimes","\\brace","\\brack","\\breve","\\bull","\\bullet","\\bumpeq","\\cancel","\\cap","\\cdot","\\cdotp","\\cdots","\\centerdot","\\cfrac","\\ch","\\char","\\check","\\checkmark","\\chi","\\choose","\\circ","\\circeq","\\circlearrowleft","\\circlearrowright","\\circledR","\\circledS","\\circledast","\\circledcirc","\\circleddash","\\clap","\\clubs","\\clubsuit","\\cnums","\\colon","\\colonapprox","\\coloncolon","\\coloncolonapprox","\\coloncolonequals","\\coloncolonminus","\\coloncolonsim","\\coloneq","\\coloneqq","\\colonequals","\\colonminus","\\colonsim","\\color","\\colorbox","\\complement","\\cong","\\coprod","\\copyright","\\cos","\\cosec","\\cosh","\\cot","\\cotg","\\coth","\\cr","\\csc","\\ctg","\\cth","\\cup","\\curlyeqprec","\\curlyeqsucc","\\curlyvee","\\curlywedge","\\curvearrowleft","\\curvearrowright","\\dArr","\\dag","\\dagger","\\daleth","\\darr","\\dashleftarrow","\\dashrightarrow","\\dashv","\\dbinom","\\dblcolon","\\ddag","\\ddagger","\\ddot","\\ddots","\\def","\\deg","\\degree","\\delta","\\det","\\dfrac","\\diagdown","\\diagup","\\diamond","\\diamonds","\\diamondsuit","\\digamma","\\dim","\\displaystyle","\\div","\\divideontimes","\\dot","\\doteq","\\doteqdot","\\dotplus","\\dots","\\dotsb","\\dotsc","\\dotsi","\\dotsm","\\dotso","\\dotsx","\\doublebarwedge","\\doublecap","\\doublecup","\\downarrow","\\downdownarrows","\\downharpoonleft","\\downharpoonright","\\egroup","\\ell","\\empty","\\emptyset","\\end","\\endgroup","\\enskip","\\enspace","\\epsilon","\\eqcirc","\\eqcolon","\\eqqcolon","\\eqsim","\\eqslantgtr","\\eqslantless","\\equalscolon","\\equalscoloncolon","\\equiv","\\eta","\\eth","\\exist","\\exists","\\exp","\\fallingdotseq","\\fbox","\\fcolorbox","\\flat","\\footnotesize","\\forall","\\frac","\\frak","\\frown","\\gamma","\\gcd","\\gdef","\\ge","\\genfrac","\\geq","\\geqq","\\geqslant","\\gets","\\gg","\\ggg","\\gggtr","\\gimel","\\global","\\gnapprox","\\gneq","\\gneqq","\\gnsim","\\goldA","\\goldB","\\goldC","\\goldD","\\goldE","\\grave","\\gray","\\grayA","\\grayB","\\grayC","\\grayD","\\grayE","\\grayF","\\grayG","\\grayH","\\grayI","\\green","\\greenA","\\greenB","\\greenC","\\greenD","\\greenE","\\gt","\\gtrapprox","\\gtrdot","\\gtreqless","\\gtreqqless","\\gtrless","\\gtrsim","\\gvertneqq","\\hArr","\\harr","\\hat","\\hbar","\\hdashline","\\hearts","\\heartsuit","\\hline","\\hom","\\hookleftarrow","\\hookrightarrow","\\hphantom","\\href","\\hskip","\\hslash","\\hspace","\\huge","\\i","\\idotsint","\\iff","\\iiiint","\\iiint","\\iint","\\image","\\imath","\\impliedby","\\implies","\\in","\\inf","\\infin","\\infty","\\int","\\intercal","\\intop","\\iota","\\isin","\\it","\\j","\\jmath","\\kaBlue","\\kaGreen","\\kappa","\\ker","\\kern","\\lArr","\\lVert","\\lambda","\\land","\\lang","\\langle","\\large","\\larr","\\lbrace","\\lbrack","\\lceil","\\ldotp","\\ldots","\\le","\\leadsto","\\left","\\leftarrow","\\leftarrowtail","\\leftharpoondown","\\leftharpoonup","\\leftleftarrows","\\leftrightarrow","\\leftrightarrows","\\leftrightharpoons","\\leftrightsquigarrow","\\leftthreetimes","\\leq","\\leqq","\\leqslant","\\lessapprox","\\lessdot","\\lesseqgtr","\\lesseqqgtr","\\lessgtr","\\lesssim","\\lfloor","\\lg","\\lgroup","\\lhd","\\lim","\\liminf","\\limits","\\limsup","\\ll","\\llap","\\llcorner","\\lll","\\llless","\\lmoustache","\\ln","\\lnapprox","\\lneq","\\lneqq","\\lnot","\\lnsim","\\log","\\longleftarrow","\\longleftrightarrow","\\longmapsto","\\longrightarrow","\\looparrowleft","\\looparrowright","\\lor","\\lozenge","\\lq","\\lrArr","\\lrarr","\\lrcorner","\\lt","\\ltimes","\\lvert","\\lvertneqq","\\maltese","\\mapsto","\\maroonA","\\maroonB","\\maroonC","\\maroonD","\\maroonE","\\mathbb","\\mathbf","\\mathbin","\\mathcal","\\mathchoice","\\mathclap","\\mathclose","\\mathellipsis","\\mathfrak","\\mathinner","\\mathit","\\mathllap","\\mathop","\\mathopen","\\mathord","\\mathpunct","\\mathrel","\\mathring","\\mathrlap","\\mathrm","\\mathscr","\\mathsf","\\mathsterling","\\mathtt","\\max","\\measuredangle","\\medspace","\\mho","\\mid","\\middle","\\min","\\mintA","\\mintB","\\mintC","\\minuscolon","\\minuscoloncolon","\\mkern","\\mod","\\models","\\mp","\\mskip","\\mu","\\multimap","\\nLeftarrow","\\nLeftrightarrow","\\nRightarrow","\\nVDash","\\nVdash","\\nabla","\\natnums","\\natural","\\ncong","\\ne","\\nearrow","\\neg","\\negmedspace","\\negthickspace","\\negthinspace","\\neq","\\newcommand","\\newline","\\nexists","\\ngeq","\\ngeqq","\\ngeqslant","\\ngtr","\\ni","\\nleftarrow","\\nleftrightarrow","\\nleq","\\nleqq","\\nleqslant","\\nless","\\nmid","\\nobreak","\\nobreakspace","\\nolimits","\\normalsize","\\not","\\notin","\\notni","\\nparallel","\\nprec","\\npreceq","\\nrightarrow","\\nshortmid","\\nshortparallel","\\nsim","\\nsubseteq","\\nsubseteqq","\\nsucc","\\nsucceq","\\nsupseteq","\\nsupseteqq","\\ntriangleleft","\\ntrianglelefteq","\\ntriangleright","\\ntrianglerighteq","\\nu","\\nvDash","\\nvdash","\\nwarrow","\\o","\\odot","\\oe","\\oiiint","\\oiint","\\oint","\\omega","\\omicron","\\ominus","\\operatorname","\\oplus","\\orange","\\ordinarycolon","\\oslash","\\otimes","\\over","\\overbrace","\\overgroup","\\overleftarrow","\\overleftharpoon","\\overleftrightarrow","\\overline","\\overlinesegment","\\overrightarrow","\\overrightharpoon","\\overset","\\owns","\\parallel","\\partial","\\perp","\\phantom","\\phi","\\pi","\\pink","\\pitchfork","\\plusmn","\\pm","\\pmb","\\pmod","\\pod","\\pounds","\\prec","\\precapprox","\\preccurlyeq","\\preceq","\\precnapprox","\\precneqq","\\precnsim","\\precsim","\\prime","\\prod","\\propto","\\providecommand","\\psi","\\purple","\\purpleA","\\purpleB","\\purpleC","\\purpleD","\\purpleE","\\qquad","\\quad","\\r","\\rArr","\\rVert","\\raisebox","\\rang","\\rangle","\\rarr","\\ratio","\\rbrace","\\rbrack","\\rceil","\\real","\\reals","\\red","\\redA","\\redB","\\redC","\\redD","\\redE","\\relax","\\relbar","\\renewcommand","\\restriction","\\rfloor","\\rgroup","\\rhd","\\rho","\\right","\\rightarrow","\\rightarrowtail","\\rightharpoondown","\\rightharpoonup","\\rightleftarrows","\\rightleftharpoons","\\rightrightarrows","\\rightsquigarrow","\\rightthreetimes","\\risingdotseq","\\rlap","\\rm","\\rmoustache","\\rq","\\rtimes","\\rule","\\rvert","\\scriptscriptstyle","\\scriptsize","\\scriptstyle","\\sdot","\\searrow","\\sec","\\sect","\\setminus","\\sf","\\sh","\\sharp","\\shortmid","\\shortparallel","\\sigma","\\sim","\\simcolon","\\simcoloncolon","\\simeq","\\sin","\\sinh","\\sixptsize","\\small","\\smallfrown","\\smallint","\\smallsetminus","\\smallsmile","\\smash","\\smile","\\sout","\\space","\\spades","\\spadesuit","\\sphericalangle","\\sqcap","\\sqcup","\\sqrt","\\sqsubset","\\sqsubseteq","\\sqsupset","\\sqsupseteq","\\square","\\ss","\\stackrel","\\star","\\sub","\\sube","\\subset","\\subseteq","\\subseteqq","\\subsetneq","\\subsetneqq","\\succ","\\succapprox","\\succcurlyeq","\\succeq","\\succnapprox","\\succneqq","\\succnsim","\\succsim","\\sum","\\sup","\\supe","\\supset","\\supseteq","\\supseteqq","\\supsetneq","\\supsetneqq","\\surd","\\swarrow","\\tag","\\tan","\\tanh","\\tau","\\tbinom","\\tealA","\\tealB","\\tealC","\\tealD","\\tealE","\\text","\\textasciitilde","\\textbar","\\textbardbl","\\textbf","\\textbraceleft","\\textbraceright","\\textcircled","\\textcolor","\\textcopyright","\\textdagger","\\textdaggerdbl","\\textdegree","\\textdollar","\\textellipsis","\\textemdash","\\textendash","\\textgreater","\\textit","\\textless","\\textnormal","\\textquotedblleft","\\textquotedblright","\\textquoteleft","\\textquoteright","\\textregistered","\\textrm","\\textsf","\\textsterling","\\textstyle","\\texttt","\\textunderscore","\\tfrac","\\tg","\\th","\\therefore","\\theta","\\thetasym","\\thickapprox","\\thicksim","\\thickspace","\\thinspace","\\tilde","\\times","\\tiny","\\tmspace","\\to","\\top","\\triangle","\\triangledown","\\triangleleft","\\trianglelefteq","\\triangleq","\\triangleright","\\trianglerighteq","\\tt","\\twoheadleftarrow","\\twoheadrightarrow","\\u","\\uArr","\\uarr","\\ulcorner","\\underbrace","\\undergroup","\\underleftarrow","\\underleftrightarrow","\\underline","\\underlinesegment","\\underrightarrow","\\underset","\\unlhd","\\unrhd","\\uparrow","\\updownarrow","\\upharpoonleft","\\upharpoonright","\\uplus","\\upsilon","\\upuparrows","\\urcorner","\\url","\\utilde","\\v","\\vDash","\\varDelta","\\varGamma","\\varLambda","\\varOmega","\\varPhi","\\varPi","\\varPsi","\\varSigma","\\varTheta","\\varUpsilon","\\varXi","\\varepsilon","\\varkappa","\\varnothing","\\varphi","\\varpi","\\varpropto","\\varrho","\\varsigma","\\varsubsetneq","\\varsubsetneqq","\\varsupsetneq","\\varsupsetneqq","\\vartheta","\\vartriangle","\\vartriangleleft","\\vartriangleright","\\varvdots","\\vcentcolon","\\vdash","\\vdots","\\vec","\\vee","\\veebar","\\verb","\\vert","\\vphantom","\\wedge","\\weierp","\\widecheck","\\widehat","\\widetilde","\\wp","\\wr","\\xLeftarrow","\\xLeftrightarrow","\\xRightarrow","\\xcancel","\\xhookleftarrow","\\xhookrightarrow","\\xi","\\xleftarrow","\\xleftequilibrium","\\xleftharpoondown","\\xleftharpoonup","\\xleftrightarrow","\\xleftrightharpoons","\\xlongequal","\\xmapsto","\\xrightarrow","\\xrightequilibrium","\\xrightharpoondown","\\xrightharpoonup","\\xrightleftarrows","\\xrightleftharpoons","\\xtofrom","\\xtwoheadleftarrow","\\xtwoheadrightarrow","\\yen","\\zeta","\\|","\\~"];
+</script>
+</html>

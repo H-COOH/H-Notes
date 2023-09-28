@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+	<meta charset="UTF-8">
+	<script src="./js/md5.js"></script>
+	<script src="./js/AES.js"></script>
+	<script src="./js/opdb.js"></script>
+	<script src="./js/info.js"></script>
+	<title>属性</title>
+</head>
+<body style="text-align:center">
+<h2>属性</h2>
+<p>创建时间：<span id="make">----</span></p>
+<p>修改时间：<span id="last">----</span></p>
+<p>总编辑时长：<span id="edit">--</span>分钟</p>
+<p><label for="read">只读：</label><input id="read" onclick="F(1)" type="checkbox"></p>
+<p><label for="only">加密：</label><input disabled id="only" type="checkbox"></p>
+<div>
+	<p><label><input id="k0" placeholder="请输入密码" type="password"></label></p>
+	<p><label><input id="k1" placeholder="请重复密码" type="password"></label></p>
+	<p>
+		<button id="b0" onclick="F(2)">确定</button>&emsp;&emsp;<button id="b1" onclick="F(3)">取消</button>
+	</p>
+</div>
+<p><label for="show">样式：</label></p><textarea id="show" oninput="F(4)"></textarea>
+<p><label for="more">备注：</label></p><textarea id="more" oninput="F(5)"></textarea>
+</body>
+<style>
+	input[type="checkbox"]
+	{zoom:120%;}
+
+	input[type="password"]
+	{
+		width:240px;
+		height:28px;
+	}
+
+	button
+	{
+		width:103px;
+		height:28px;
+	}
+
+	textarea
+	{
+		width:240px;
+		height:80px;
+	}
+</style>
+<script>
+	"use strict";
+
+	let flag=false;
+
+	function fi(k)
+	{return document.getElementById(k);}
+
+	let channel=new window.BroadcastChannel("key");
+	channel.onmessage=o=>
+	{
+		if(!flag)
+			flag=true;
+		else
+			return;
+		aes.key=o.data;
+		let url=new URL(window.location.href);
+		let mode=url.searchParams.get("mode")==="edit";
+		load_info(mode).then(()=>
+		{
+			if(info["only"]!=="")
+				data=CryptoJS.AES.decrypt(data,key2).toString(CryptoJS.enc.Utf8);
+			fi("make").innerText=info["make"];
+			fi("last").innerText=info["last"];
+			fi("edit").innerText=(info["edit"]/60).toFixed();
+			fi("read").checked=info["read"];
+			fi("k0").value=key2;
+			fi("k1").value=key2;
+			fi("show").value=info["show"];
+			fi("more").value=info["more"];
+			C();
+		});
+	};
+	channel.postMessage("");
+
+	function C()
+	{
+		fi("k0").disabled=info["read"];
+		fi("k1").disabled=info["read"];
+		fi("b0").disabled=info["read"];
+		fi("b1").disabled=info["read"];
+		fi("show").disabled=info["read"];
+		fi("more").disabled=info["read"];
+		fi("only").checked=info["only"]!=="";
+	}
+
+	function F(r)
+	{
+		if(r===1)
+		{info["read"]= !info["read"];}
+		if(r===2)
+		{
+			let k=fi("k0").value;
+			if(k!==fi("k1").value)
+				return alert("密码不一致");
+			key2=k;
+			document.cookie=name+"=@"+k+"@";
+			info["only"]=k===""?"":md5(data);
+		}
+		if(r===3)
+		{
+			fi("k0").value=key2;
+			fi("k1").value=key2;
+			return;
+		}
+		if(r===4)
+			info["show"]=fi("show").value;
+		if(r===5)
+			info["more"]=fi("more").value;
+		let use=data;
+		if(info["only"]!=="")
+			use=CryptoJS.AES.encrypt(data,key2).toString();
+		ntdb.putnote(name,{"info":info,"data":use});
+		C();
+	}
+</script>
+</html>
